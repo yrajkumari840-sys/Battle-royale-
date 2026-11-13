@@ -1,0 +1,331 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BattleZone India - Battle Royale</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#101820;color:white;
+ font-family:Arial,sans-serif;text-align:center;
+}
+header{
+ padding:16px;background:#172b3a;
+ border-bottom:3px solid #ff9d00;
+}
+h1{color:#ffae00;margin:5px}
+p{color:#ddd}
+.game{
+ max-width:900px;margin:15px auto;padding:10px;
+}
+canvas{
+ width:100%;height:auto;
+ background:#536d3b;border:3px solid #ffae00;
+ border-radius:12px;display:block;
+ touch-action:none;
+}
+button{
+ border:0;border-radius:10px;padding:13px 20px;
+ background:#ff9800;color:white;font-weight:bold;
+ margin:5px;font-size:16px;
+}
+button:active{background:#e65100}
+.stats{
+ display:flex;justify-content:space-around;
+ background:#243747;padding:12px;
+ border-radius:10px;margin:10px 0;
+}
+.controls{
+ display:flex;justify-content:space-between;
+ align-items:center;margin-top:12px;
+}
+.dpad{
+ display:grid;grid-template-columns:55px 55px 55px;
+ gap:5px;
+}
+.dpad button{padding:15px 5px;margin:0}
+.fire{background:#e53935;padding:25px;border-radius:50%}
+#message{color:#ffca28;font-size:20px;font-weight:bold}
+@media(min-width:700px){
+ .controls{max-width:500px;margin:15px auto}
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>🔥 BATTLEZONE INDIA</h1>
+<p>Battle Royale Survival Game</p>
+</header>
+
+<div class="game">
+<div class="stats">
+<span>❤️ HP: <b id="hp">100</b></span>
+<span>💀 Kills: <b id="kills">0</b></span>
+<span>🏆 Score: <b id="score">0</b></span>
+</div>
+
+<canvas id="game" width="800" height="500"></canvas>
+
+<p id="message">Ready for Battle?</p>
+<button onclick="startGame()">▶ START GAME</button>
+<button onclick="restartGame()">↻ RESTART</button>
+
+<div class="controls">
+<div class="dpad">
+<button></button>
+<button data-key="up">▲</button>
+<button></button>
+<button data-key="left">◀</button>
+<button data-key="down">▼</button>
+<button data-key="right">▶</button>
+</div>
+<button class="fire" id="fire">🔥 FIRE</button>
+</div>
+
+<p>PC: WASD / Arrow Keys से चलें और Space से गोली चलाएं।</p>
+<p>Mobile: स्क्रीन के बटन से खेलें।</p>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let player,enemies,bullets,keys;
+let running=false,kills=0,score=0;
+let hp=100,fireCooldown=0,spawnTimer=0;
+let animation;
+
+function reset(){
+ player={x:400,y:250,r:15,speed:3.5};
+ enemies=[];
+ bullets=[];
+ keys={};
+ kills=0;score=0;hp=100;
+ fireCooldown=0;spawnTimer=0;
+ updateStats();
+}
+
+function updateStats(){
+ document.getElementById("hp").textContent=hp;
+ document.getElementById("kills").textContent=kills;
+ document.getElementById("score").textContent=score;
+}
+
+function startGame(){
+ if(running)return;
+ if(hp<=0)reset();
+ running=true;
+ document.getElementById("message").textContent="🔥 FIGHT!";
+ cancelAnimationFrame(animation);
+ loop();
+}
+
+function restartGame(){
+ running=false;
+ cancelAnimationFrame(animation);
+ reset();
+ draw();
+ document.getElementById("message").textContent="Ready for Battle?";
+}
+
+function spawnEnemy(){
+ let side=Math.floor(Math.random()*4);
+ let x=side===0?0:side===1?800:Math.random()*800;
+ let y=side===2?0:side===3?500:Math.random()*500;
+ enemies.push({x,y,r:14,speed:0.8+Math.random()*0.7});
+}
+
+function shoot(){
+ if(!running || fireCooldown>0)return;
+ if(enemies.length===0)return;
+
+ let target=enemies.reduce((a,b)=>{
+  let da=Math.hypot(a.x-player.x,a.y-player.y);
+  let db=Math.hypot(b.x-player.x,b.y-player.y);
+  return da<db?a:b;
+ });
+
+ let angle=Math.atan2(target.y-player.y,target.x-player.x);
+ bullets.push({
+  x:player.x,y:player.y,
+  vx:Math.cos(angle)*8,
+  vy:Math.sin(angle)*8
+ });
+ fireCooldown=18;
+}
+
+function draw(){
+ ctx.clearRect(0,0,800,500);
+
+ // Arena
+ ctx.fillStyle="#536d3b";
+ ctx.fillRect(0,0,800,500);
+
+ // Ground details
+ ctx.strokeStyle="rgba(255,255,255,.08)";
+ for(let x=0;x<800;x+=50){
+  ctx.beginPath();ctx.moveTo(x,0);
+  ctx.lineTo(x,500);ctx.stroke();
+ }
+ for(let y=0;y<500;y+=50){
+  ctx.beginPath();ctx.moveTo(0,y);
+  ctx.lineTo(800,y);ctx.stroke();
+ }
+
+ // Safe zone boundary
+ ctx.strokeStyle="#65d9ff";
+ ctx.lineWidth=4;
+ ctx.beginPath();ctx.arc(400,250,230,0,Math.PI*2);
+ ctx.stroke();
+
+ // Player
+ ctx.fillStyle="#00d9ff";
+ ctx.beginPath();
+ ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+ ctx.fill();
+ ctx.fillStyle="white";
+ ctx.fillRect(player.x-5,player.y-5,10,10);
+
+ // Enemies
+ enemies.forEach(e=>{
+  ctx.fillStyle="#e53935";
+  ctx.beginPath();
+  ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle="white";
+  ctx.fillRect(e.x-5,e.y-4,10,5);
+ });
+
+ // Bullets
+ ctx.fillStyle="#ffeb3b";
+ bullets.forEach(b=>{
+  ctx.beginPath();
+  ctx.arc(b.x,b.y,5,0,Math.PI*2);
+  ctx.fill();
+ });
+}
+
+function update(){
+ if(!running)return;
+
+ let dx=0,dy=0;
+ if(keys.up)dy--;
+ if(keys.down)dy++;
+ if(keys.left)dx--;
+ if(keys.right)dx++;
+
+ if(dx||dy){
+  let len=Math.hypot(dx,dy);
+  player.x+=dx/len*player.speed;
+  player.y+=dy/len*player.speed;
+ }
+
+ player.x=Math.max(15,Math.min(785,player.x));
+ player.y=Math.max(15,Math.min(485,player.y));
+
+ if(fireCooldown>0)fireCooldown--;
+
+ spawnTimer++;
+ if(spawnTimer>90 && enemies.length<12){
+  spawnEnemy();
+  spawnTimer=0;
+ }
+
+ // Enemy movement
+ enemies.forEach(e=>{
+  let a=Math.atan2(player.y-e.y,player.x-e.x);
+  e.x+=Math.cos(a)*e.speed;
+  e.y+=Math.sin(a)*e.speed;
+
+  if(Math.hypot(e.x-player.x,e.y-player.y)<25){
+   hp-=0.35;
+  }
+ });
+
+ // Bullet movement
+ bullets.forEach(b=>{
+  b.x+=b.vx;b.y+=b.vy;
+ });
+
+ bullets=bullets.filter(b=>
+  b.x>=0&&b.x<=800&&b.y>=0&&b.y<=500
+ );
+
+ // Collision
+ bullets.forEach(b=>{
+  enemies.forEach(e=>{
+   if(!e.dead&&Math.hypot(b.x-e.x,b.y-e.y)<e.r+5){
+    e.dead=true;
+    b.dead=true;
+    kills++;
+    score+=100;
+   }
+  });
+ });
+
+ bullets=bullets.filter(b=>!b.dead);
+ enemies=enemies.filter(e=>!e.dead);
+
+ if(hp<=0){
+  hp=0;running=false;
+  document.getElementById("message").textContent=
+  "💀 GAME OVER! Score: "+score;
+ }
+
+ updateStats();
+}
+
+function loop(){
+ if(!running)return;
+ update();
+ draw();
+ animation=requestAnimationFrame(loop);
+}
+
+reset();
+draw();
+
+// Keyboard controls
+document.addEventListener("keydown",e=>{
+ let k=e.key.toLowerCase();
+ if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))
+ e.preventDefault();
+
+ if(k==="w"||k==="arrowup")keys.up=true;
+ if(k==="s"||k==="arrowdown")keys.down=true;
+ if(k==="a"||k==="arrowleft")keys.left=true;
+ if(k==="d"||k==="arrowright")keys.right=true;
+ if(k===" ")shoot();
+});
+
+document.addEventListener("keyup",e=>{
+ let k=e.key.toLowerCase();
+ if(k==="w"||k==="arrowup")keys.up=false;
+ if(k==="s"||k==="arrowdown")keys.down=false;
+ if(k==="a"||k==="arrowleft")keys.left=false;
+ if(k==="d"||k==="arrowright")keys.right=false;
+});
+
+// Mobile movement buttons
+document.querySelectorAll("[data-key]").forEach(btn=>{
+ let key=btn.dataset.key;
+ btn.addEventListener("pointerdown",e=>{
+  e.preventDefault();keys[key]=true;
+ });
+ ["pointerup","pointercancel","pointerleave"].forEach(ev=>{
+  btn.addEventListener(ev,()=>keys[key]=false);
+ });
+});
+
+// Mobile fire
+const fire=document.getElementById("fire");
+fire.addEventListener("pointerdown",e=>{
+ e.preventDefault();shoot();
+});
+
+</script>
+</body>
+</html>
